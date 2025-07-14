@@ -4,6 +4,9 @@ import (
 	"enconder/domain"
 	"log"
 
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	_ "github.com/lib/pq"
+
 	"github.com/jinzhu/gorm"
 )
 
@@ -58,6 +61,8 @@ func (d *Database) Connect() (*gorm.DB, error) {
 
 	if d.AutoMigrateDb {
 		d.Db.AutoMigrate(&domain.Video{}, &domain.Job{})
+																				// origin table, dest table, onDelete, onUpdate
+		d.Db.Model(domain.Job{}).AddForeignKey("video_id", "video (id)", "CASCADE", "CASCADE")
 	}
 
 	return d.Db, nil
