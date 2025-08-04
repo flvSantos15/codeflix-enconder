@@ -2,9 +2,10 @@ package services
 
 import (
 	"context"
+	"io"
+	"log"
 	"os"
 	"strings"
-	"io"
 
 	"cloud.google.com/go/storage"
 )
@@ -13,7 +14,7 @@ type VideoUpload struct {
 	Paths []string
 	VideoPath string
 	OutputBucket string
-	Errorss []string
+	Errors []string
 }
 
 func NewVideoUpload() *VideoUpload {
@@ -80,12 +81,29 @@ func (vu *VideoUpload) ProcessUpload(concurrency int, doneUpload chan string) er
 			in <- x
 		}
 	}()
+
+	for r := range returnChan {
+		if r != "" {
+			doneUpload <- err
+			break
+		}
+	}
 }
 
 func (vu *VideoUpload) uploadWorker(in chan int, returnChan chan string, uploadClient *storage.Client, ctx context.Context) {
 	for x:= range in {
-		
+		err := vu.UploadObject(vu.Paths[x], uploadClient, ctx)
+
+		if err != nil {
+			vu.Errors = append(vu.Errors, vu.Paths[x])
+			log.Printf("error during the upload: %v. Error %v", vu.Paths[x], err)
+			returnChan <- err.Error()
+		}
+
+		returnChan <- ""
 	}
+
+	returnChan <- "upload completed"
 }
 
 func getClientUpload() (*storage.Client, context.Context, error) {
