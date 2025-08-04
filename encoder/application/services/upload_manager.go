@@ -5,6 +5,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -22,7 +24,7 @@ func NewVideoUpload() *VideoUpload {
 }
 
 func (vu *VideoUpload) UploadObject(objectPath string, client *storage.Client, ctx context.Context) error {
-	path : strings.Split(objectPath, os.Getenv("localStoragePath")+"/")
+	path := strings.Split(objectPath, os.Getenv("localStoragePath")+"/")
 
 	f, err := os.Open(objectPath)
 	if err != nil {
@@ -33,7 +35,7 @@ func (vu *VideoUpload) UploadObject(objectPath string, client *storage.Client, c
 	wc := client.Bucket(vu.OutputBucket).Object(path[1]).NewWriter(ctx)
 	wc.ACL = []storage.ACLRule{{Entity: storage.AllUsers, Role: storage.RoleReader}}
 
-	if _, err != io.Copy(wc, f); err != nil {
+	if _, err := io.Copy(wc, f); err != nil {
 		return err
 	}
 
@@ -45,12 +47,12 @@ func (vu *VideoUpload) UploadObject(objectPath string, client *storage.Client, c
 }
 
 func (vu *VideoUpload) loadPaths() error {
-	err := filePath.Walk(vu.VideoPath), fun(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(vu.VideoPath, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
 			vu.Paths = append(vu.Paths, path)
 		}
 		return nil
-	}
+	})
 
 	if err != nil {
 		return err
@@ -82,16 +84,18 @@ func (vu *VideoUpload) ProcessUpload(concurrency int, doneUpload chan string) er
 		}
 	}()
 
-	for r := range returnChan {
+	for r := range returnChannel {
 		if r != "" {
-			doneUpload <- err
+			doneUpload <- r
 			break
 		}
 	}
+
+	return nil
 }
 
 func (vu *VideoUpload) uploadWorker(in chan int, returnChan chan string, uploadClient *storage.Client, ctx context.Context) {
-	for x:= range in {
+	for x := range in {
 		err := vu.UploadObject(vu.Paths[x], uploadClient, ctx)
 
 		if err != nil {
