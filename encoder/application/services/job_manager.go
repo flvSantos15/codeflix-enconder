@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"enconder/application/repositories"
 	"enconder/domain"
 	"enconder/framework/queue"
@@ -74,20 +75,59 @@ func (j *JobManager) checkParseErrors(jobResult JobWorkerResult) error {
 		log.Printf("MessageID #{jobResult.Message.DeliveryTag}. Error parsing message: #{jobRsult.Error}")
 	}
 
-	// errMsg := JobNotificationError{
-	// 	Message: string(jobResult.Message.Body),
-	// 	Error: jobResult.Error.Error(),
-	// }
+	errMsg := JobNotificationError{
+		Message: string(jobResult.Message.Body),
+		Error: jobResult.Error.Error(),
+	}
 
-	// jobJson, err := json.Marshal(errMsg)
-	// if err != nil {
-	// 	return err
-	// }
+	jobJson, err := json.Marshal(errMsg)
+	if err != nil {
+		return err
+	}
+
+	err = j.notify(jobJson)
+	if err != nil {
+		return err
+	}
+
+	err = jobResult.Message.Reject(false)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func (j *JobManager) notifySuccess(jobResult JobWorkerResult, ch *amqp.Channel) error {
+	jobJson, err := json.Marshal(jobResult.Job)
+	if err != nil {
+		return err
+	}
+
+	err = j.notify(jobJson)
+	if err != nil {
+		return err
+	}
+
+	err = jobResult.Message.Ack(false)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (j *JobManager) notify(jobJson []byte) error {
+	err := j.RabbitMQ.Notify(
+		string(jobJson),
+		"application/json",
+		os.Getenv("RABBITMQ_NOTIFICATION_EX"),
+		os.Getenv("RABBITMQ_NOTIFICATION_ROUTING_KEY"),
+	)
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
