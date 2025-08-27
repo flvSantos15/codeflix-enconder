@@ -65,7 +65,6 @@ func (j *JobManager) Start(ch *amqp.Channel) {
 			jobResult.Message.Reject(false)
 		}
 	}
-
 }
 
 func (j *JobManager) checkParseErrors(jobResult JobWorkerResult) error {
